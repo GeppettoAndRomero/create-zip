@@ -133,28 +133,7 @@ export function ConversionManager({ locale = 'en' }: ConversionManagerProps) {
           />
         </div>
 
-        {files.length > 0 && (
-          <div style="display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4);">
-            {files.map((f, i) => (
-              <div
-                key={`${f.name}-${i}`}
-                style="display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) var(--space-3); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm);"
-              >
-                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{f.name}</span>
-                <span style="display: flex; gap: var(--space-3); align-items: center; flex-shrink: 0;">
-                  <span style="font-size: var(--fs-1); color: var(--color-subtle);" class="num">{humanSize(f.size)}</span>
-                  <button
-                    aria-label={t.removeFile ?? 'Remove'}
-                    onClick={() => removeAt(i)}
-                    style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: var(--fs-3);"
-                  >×</button>
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: var(--space-3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4);">
           <span style="font-size: var(--fs-2); color: var(--color-subtle);">
             <span class="num">{files.length}</span> · <span class="num">{humanSize(totalSize)}</span>
           </span>
@@ -174,6 +153,27 @@ export function ConversionManager({ locale = 'en' }: ConversionManagerProps) {
             </button>
           </span>
         </div>
+
+        {files.length > 0 && (
+          <div style="display: flex; flex-direction: column; gap: var(--space-2);">
+            {files.map((f, i) => (
+              <div
+                key={`${f.name}-${i}`}
+                style="display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) var(--space-3); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm);"
+              >
+                <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{f.name}</span>
+                <span style="display: flex; gap: var(--space-3); align-items: center; flex-shrink: 0;">
+                  <span style="font-size: var(--fs-1); color: var(--color-subtle);" class="num">{humanSize(f.size)}</span>
+                  <button
+                    aria-label={t.removeFile ?? 'Remove'}
+                    onClick={() => removeAt(i)}
+                    style="background: none; border: none; cursor: pointer; color: var(--color-danger); font-size: var(--fs-3);"
+                  >×</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </AppCard>
 
       {errorToasts.length > 0 && (
