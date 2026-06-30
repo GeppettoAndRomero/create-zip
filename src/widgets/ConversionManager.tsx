@@ -35,6 +35,7 @@ export function ConversionManager({ locale = 'en' }: ConversionManagerProps) {
   const [errorToasts, setErrorToasts] = useState<ErrorToastItem[]>([]);
   const filesRef = useRef<File[]>([]);
   filesRef.current = files;
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const showErrorToast = useCallback((message: string) => {
     const id = `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -47,6 +48,16 @@ export function ConversionManager({ locale = 'en' }: ConversionManagerProps) {
   // ハイドレーション完了シグナル（E2E）
   useEffect(() => {
     (globalThis as Record<string, unknown>).__toolReady = true;
+  }, []);
+
+  // フォルダ選択 input に webkitdirectory を後付け（JSX 型に無いため属性で設定）。
+  // フォルダ選択時は各 File に webkitRelativePath が入り、zipEngine が階層を保持する。
+  useEffect(() => {
+    const el = folderInputRef.current;
+    if (el) {
+      el.setAttribute('webkitdirectory', '');
+      el.setAttribute('directory', '');
+    }
   }, []);
 
   const addFiles = useCallback((incoming: File[]) => {
@@ -121,8 +132,31 @@ export function ConversionManager({ locale = 'en' }: ConversionManagerProps) {
           <div style="font-size: var(--fs-1); color: var(--color-subtle); margin-top: var(--space-1);">
             {t.dropSupported}
           </div>
+          <div style="margin-top: var(--space-3);">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                folderInputRef.current?.click();
+              }}
+              style="background: none; border: none; padding: 0; color: var(--color-primary); cursor: pointer; font-size: var(--fs-1); text-decoration: underline;"
+            >
+              {t.dropFolder ?? 'Select a folder'}
+            </button>
+          </div>
           <input
             id="file-input"
+            type="file"
+            multiple
+            onChange={(e) => {
+              addFiles(Array.from(e.currentTarget.files || []));
+              e.currentTarget.value = '';
+            }}
+            style="display: none;"
+          />
+          <input
+            ref={folderInputRef}
+            id="folder-input"
             type="file"
             multiple
             onChange={(e) => {

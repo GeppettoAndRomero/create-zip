@@ -10,6 +10,56 @@ interface GlobalDropZoneProps {
   locale?: string;
 }
 
+/** ディレクトリの全エントリを読み切る（readEntries はバッチで返るため空になるまで反復）。 */
+function readAllEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  return new Promise((resolve, reject) => {
+    const all: FileSystemEntry[] = [];
+    const readBatch = () => {
+      reader.readEntries((batch) => {
+        if (batch.length === 0) {
+          resolve(all);
+          return;
+        }
+        all.push(...batch);
+        readBatch();
+      }, reject);
+    };
+    readBatch();
+  });
+}
+
+function entryToFile(entry: FileSystemFileEntry): Promise<File> {
+  return new Promise((resolve, reject) => entry.file(resolve, reject));
+}
+
+/** FileSystemEntry を再帰的に辿り、フォルダ階層を webkitRelativePath に載せた File を集める。 */
+async function collectEntry(entry: FileSystemEntry, out: File[]): Promise<void> {
+  if (entry.isFile) {
+    const file = await entryToFile(entry as FileSystemFileEntry);
+    const rel = entry.fullPath.replace(/^\/+/, '');
+    if (rel && rel !== file.name) {
+      try {
+        // ドロップ由来の File は webkitRelativePath が空。ここで付与して
+        // zipEngine.entryName() にフォルダ階層を伝える。
+        Object.defineProperty(file, 'webkitRelativePath', { value: rel, configurable: true });
+      } catch {
+        // 一部環境ではプロパティが固定。その場合は名前のみ（階層なし）で続行。
+      }
+    }
+    out.push(file);
+  } else if (entry.isDirectory) {
+    const children = await readAllEntries((entry as FileSystemDirectoryEntry).createReader());
+    for (const child of children) await collectEntry(child, out);
+  }
+}
+
+/** ドロップされた複数エントリ（ファイル/フォルダ混在）を再帰展開して File 配列にする。 */
+async function filesFromEntries(entries: FileSystemEntry[]): Promise<File[]> {
+  const out: File[] = [];
+  for (const entry of entries) await collectEntry(entry, out);
+  return out;
+}
+
 export function GlobalDropZone({ locale = 'en' }: GlobalDropZoneProps) {
   const t = (ui as any)[locale] ?? ui.en;
   const [isDragging, setIsDragging] = useState(false);
@@ -51,16 +101,45 @@ export function GlobalDropZone({ locale = 'en' }: GlobalDropZoneProps) {
       dragCounter = 0;
       setIsDragging(false);
 
-      const files = Array.from(e.dataTransfer?.files || []);
-      if (files.length > 0) {
-        // 処理中状態に移行
-        setIsProcessing(true);
-        setFileCount(files.length);
+      const dt = e.dataTransfer;
+      // ドロップ直後の同期スナップショット（dataTransfer はイベント後に無効化される）。
+      const flatFiles = Array.from(dt?.files || []);
 
-        // カスタムイベントを発火してファイルを送信
-        window.dispatchEvent(
-          new CustomEvent('filesDropped', { detail: files })
-        );
+      // フォルダを含むドロップは webkitGetAsEntry で再帰展開する。
+      // entry の取得はイベント生存中に同期で行う必要がある。
+      const entries: FileSystemEntry[] = [];
+      const items = dt?.items;
+      if (items) {
+        for (let i = 0; i < items.length; i++) {
+          const entry =
+            typeof items[i].webkitGetAsEntry === 'function' ? items[i].webkitGetAsEntry() : null;
+          if (entry) entries.push(entry);
+        }
+      }
+
+      const dispatch = (list: File[]) => {
+        setFileCount(list.length);
+        window.dispatchEvent(new CustomEvent('filesDropped', { detail: list }));
+      };
+
+      if (entries.length > 0) {
+        // 処理中状態に移行（フォルダ走査中もオーバーレイを表示）
+        setIsProcessing(true);
+        setFileCount(flatFiles.length || entries.length);
+        filesFromEntries(entries)
+          .then((collected) => {
+            const out = collected.length > 0 ? collected : flatFiles;
+            if (out.length > 0) dispatch(out);
+            else setIsProcessing(false);
+          })
+          .catch(() => {
+            // 走査に失敗したらフラットなファイル一覧でフォールバック
+            if (flatFiles.length > 0) dispatch(flatFiles);
+            else setIsProcessing(false);
+          });
+      } else if (flatFiles.length > 0) {
+        setIsProcessing(true);
+        dispatch(flatFiles);
       }
     };
 
